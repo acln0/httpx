@@ -1,0 +1,4 @@
+acln.ro/log v0.2.0 h1:p9L2DxdzZZ57S6ecZAnucYaoHWjxQQ+QAyiZJjVsRM4=
+acln.ro/log v0.2.0/go.mod h1:X4c2IcIg7NDpRDmNcKXNLp0oHJFy/197FFrpYpSFpv0=
+github.com/felixge/httpsnoop v1.0.0 h1:gh8fMGz0rlOv/1WmRZm7OgncIOTsAj21iNJot48omJQ=
+github.com/felixge/httpsnoop v1.0.0/go.mod h1:3+D9sFq0ahK/JeJPhCBUV1xlf4/eIYrUQaxulT0VzX8=

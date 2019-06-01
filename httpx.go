@@ -21,6 +21,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
+
+	"acln.ro/log"
+	"github.com/felixge/httpsnoop"
 )
 
 // Shift shifts req.URL.Path forward by one segment, and returns the segment,
@@ -56,7 +60,10 @@ func shift(path string) (seg string, rest string) {
 
 type key int
 
-const pathKey key = 0
+const (
+	pathKey      key = 0
+	requestIDKey key = 1
+)
 
 // WithPath stores req.URL.Path in the context associated with req, and
 // returns the new *http.Request, with the updated context.
@@ -82,4 +89,79 @@ func Path(req *http.Request) string {
 		return ""
 	}
 	return val.(string)
+}
+
+// WithRequestID assigns an identifier to an HTTP request, if one is not
+// assigned already.
+func WithRequestID(req *http.Request, id string) *http.Request {
+	ctx := req.Context()
+	val := ctx.Value(requestIDKey)
+	if val != nil {
+		return req
+	}
+	return req.WithContext(context.WithValue(ctx, requestIDKey, id))
+}
+
+// RequestID returns the identifier associated with the request.
+func RequestID(req *http.Request) string {
+	val := req.Context().Value(requestIDKey)
+	if val == nil {
+		return ""
+	}
+	return val.(string)
+}
+
+// RequestLogger returns a logger scoped to the specified request. The logger
+// records the "method", "path", "remote_addr" and "user_agent" keys. If present,
+// it also records the "request_id" key.
+func RequestLogger(base *log.Logger, req *http.Request) *log.Logger {
+	kv := log.KV{
+		"method":      req.Method,
+		"path":        Path(req),
+		"remote_addr": req.RemoteAddr,
+	}
+	if ua := req.UserAgent(); ua != "" {
+		kv["user_agent"] = ua
+	}
+	if id := RequestID(req); id != "" {
+		kv["request_id"] = id
+	}
+	return base.WithKV(kv)
+}
+
+// ServeInstrumented instruments w, wraps h, and calls the wrapped handler
+// with the instrumented http.ResponseWriter and the specified *http.Request.
+// It returns a summary of the request.
+func ServeInstrumented(h http.Handler, w http.ResponseWriter, req *http.Request) Summary {
+	m := httpsnoop.CaptureMetrics(h, w, req)
+	return Summary{
+		Status:   m.Code,
+		Duration: m.Duration,
+		Written:  m.Written,
+	}
+}
+
+// Summary is a summary of an HTTP server response.
+type Summary struct {
+	// Status is the first HTTP status code written, or http.StatusOK
+	// if no status was written explicitly.
+	Status int
+
+	// Duration measures the duration of the request.
+	Duration time.Duration
+
+	// Written typically counts the number of bytes written to the HTTP
+	// response body.
+	Written int64
+}
+
+// KV returns key-value pairs representing the Summary, suitable for logging
+// using a acln.ro/log.Logger. The "status", "duration" and "written" keys
+// are used.
+func (s Summary) KV() log.KV {
+	return log.KV{
+		"status":   s.Status,
+		"duration": s.Duration,
+		"written":  s.Written,
+	}
 }
